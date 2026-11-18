@@ -1,0 +1,57 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: ekart-ci-cd
+spec:
+  params:
+    - name: git-url
+      type: string
+    - name: git-revision
+      type: string
+      default: main
+    - name: image
+      type: string
+      description: Full Quay image, for example quay.io/myuser/ekart
+  workspaces:
+    - name: shared-workspace
+    - name: quay-auth
+      description: Workspace containing config.json for Quay authentication
+  tasks:
+    - name: fetch-source
+      taskRef:
+        name: git-clone
+      params:
+        - name: URL
+          value: $(params.git-url)
+        - name: REVISION
+          value: $(params.git-revision)
+        - name: DELETE_EXISTING
+          value: "true"
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+    - name: build-and-push
+      runAfter: [fetch-source]
+      taskRef:
+        name: buildah
+      params:
+        - name: IMAGE
+          value: $(params.image):latest
+        - name: DOCKERFILE
+          value: ./Dockerfile
+        - name: TLSVERIFY
+          value: "true"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: dockerconfig
+          workspace: quay-auth
+    - name: deploy
+      runAfter: [build-and-push]
+      taskRef:
+        name: openshift-client
+      params:
+        - name: SCRIPT
+          value: |
+            oc set image deployment/ekart ekart=$(params.image):latest
+            oc rollout status deployment/ekart --timeout=180s

@@ -88,6 +88,43 @@ pipeline {
                 }
             }
         }
+
+stage('Deploy to OpenShift') {
+    steps {
+        echo 'Deploying eKart application to OpenShift'
+
+        withCredentials([
+            string(
+                credentialsId: 'openshift-sa-token',
+                variable: 'OPENSHIFT_TOKEN'
+            )
+        ]) {
+            sh '''
+                set +x
+                set -e
+
+                export KUBECONFIG="$(mktemp)"
+                trap 'rm -f "$KUBECONFIG"' EXIT
+
+                oc login \
+                  https://api.rm2.thpm.p1.openshiftapps.com:6443 \
+                  --token="$OPENSHIFT_TOKEN"
+
+                oc set image deployment/ekart \
+                  ekart="${IMAGE_NAME}:${BUILD_NUMBER}" \
+                  -n arunmdevops-dev
+
+                oc rollout status deployment/ekart \
+                  -n arunmdevops-dev \
+                  --timeout=180s
+
+                oc get deployment ekart \
+                  -n arunmdevops-dev
+            '''
+        }
+    }
+}
+
     }
 
     post {

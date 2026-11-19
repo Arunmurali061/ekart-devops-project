@@ -1,4 +1,5 @@
 
+
 pipeline {
     agent any
 
@@ -7,7 +8,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 echo 'Downloading eKart source code'
@@ -35,6 +35,30 @@ pipeline {
                 sh 'docker images ${IMAGE_NAME}'
             }
         }
+
+        stage('Push to Quay') {
+            steps {
+                echo 'Pushing eKart image to Quay'
+
+                withCredentials([usernamePassword(
+                    credentialsId: 'quay-robot-creds',
+                    usernameVariable: 'QUAY_USER',
+                    passwordVariable: 'QUAY_TOKEN'
+                )]) {
+                    sh '''
+                        set +x
+                        trap 'docker logout quay.io >/dev/null 2>&1 || true' EXIT
+
+                        echo "$QUAY_TOKEN" | docker login quay.io \
+                          --username "$QUAY_USER" \
+                          --password-stdin
+
+                        docker push "${IMAGE_NAME}:${BUILD_NUMBER}"
+                        docker push "${IMAGE_NAME}:latest"
+                    '''
+                }
+            }
+        }
     }
 
     post {
@@ -47,3 +71,4 @@ pipeline {
         }
     }
 }
+

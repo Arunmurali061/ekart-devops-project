@@ -8,6 +8,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 echo 'Downloading eKart source code'
@@ -59,6 +60,34 @@ pipeline {
                 }
             }
         }
+
+        stage('Verify OpenShift Access') {
+            steps {
+                echo 'Testing Jenkins connection to OpenShift'
+
+                withCredentials([
+                    string(
+                        credentialsId: 'openshift-sa-token',
+                        variable: 'OPENSHIFT_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        export KUBECONFIG="$(mktemp)"
+                        trap 'rm -f "$KUBECONFIG"' EXIT
+
+                        oc login \
+                          https://api.rm2.thpm.p1.openshiftapps.com:6443 \
+                          --token="$OPENSHIFT_TOKEN"
+
+                        oc whoami
+
+                        oc auth can-i patch deployment/ekart \
+                          -n arunmdevops-dev
+                    '''
+                }
+            }
+        }
     }
 
     post {
@@ -71,4 +100,3 @@ pipeline {
         }
     }
 }
-
